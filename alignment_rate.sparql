@@ -1,0 +1,189 @@
+# =============================================================================
+# alignment_rate.sparql
+#
+# Alignment-rate manipulation check for the dissertation's Factor B evaluation.
+# Implements the priority cascade defined in Part I §5.3 (v14):
+#
+#   1. BFO_0000144 (process profile)  →  IOF-aligned
+#   2. Any iof-constr: class           →  IOF-aligned
+#   3. Any other obo:BFO_ class        →  BFO-only-aligned
+#   4. No upper-level ancestor          →  Unaligned
+#
+# BFO_0000144 carve-out:  This class has a BFO-namespace IRI but is
+# exclusively IOF-contributed — absent from both bfo-core.owl and classic
+# bfo.owl.  IOF sourced it from BFO 2.0.  It is the only BFO-namespace
+# class with this property.  Without the carve-out, a domain class under
+# BFO_0000144 would be misclassified as BFO-only-aligned.
+#
+# The query runs on the asserted rdfs:subClassOf hierarchy (no reasoner).
+# It classifies every domain class in the ontology and produces both
+# per-class results and summary counts.
+#
+# Domain classes are identified by exclusion: any named owl:Class whose
+# IRI is not in the BFO namespace (obo:BFO_*), not in the IOF construct
+# namespace (iof-constr:*), and not owl:Thing or owl:Nothing.  This means
+# the query works across all three conditions (B0, B1, B2) without
+# modification: in B0 and B1 ontologies that never imported IOF, no
+# iof-constr: classes exist to exclude.
+#
+# Contamination signal:
+#   B0  BFO-aligned > 0  →  model used BFO IRIs from pre-training
+#   B0  IOF-aligned > 0  →  model used IOF IRIs from pre-training
+#   B1  IOF-aligned > 0  →  model used IOF IRIs despite only receiving BFO
+#   B2  BFO-only > 0     →  model bypassed IOF mid-level (expected, not contamination)
+#
+# Pinned artefacts:
+#   bfo-core.owl    versionIRI http://purl.obolibrary.org/obo/bfo/2020/bfo-core.owl
+#   Core.rdf        versionIRI https://spec.industrialontologies.org/ontology/202603/core/Core/
+#
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Query 1:  Per-class alignment classification
+# ---------------------------------------------------------------------------
+
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl:  <http://www.w3.org/2002/07/owl#>
+PREFIX obo:  <http://purl.obolibrary.org/obo/>
+PREFIX iof:  <https://spec.industrialontologies.org/ontology/construct/>
+
+SELECT ?class (STR(?class) AS ?class_iri) ?alignment
+WHERE {
+    # ---- Identify domain classes ----
+    # A domain class is any named owl:Class that is not an upper-level
+    # class and not owl:Thing / owl:Nothing.
+    ?class a owl:Class .
+    FILTER ( isIRI(?class) )
+    FILTER ( ?class != owl:Thing && ?class != owl:Nothing )
+
+    # Exclude BFO-namespace classes (upper-level, not domain)
+    FILTER ( ! STRSTARTS(STR(?class), "http://purl.obolibrary.org/obo/BFO_") )
+
+    # Exclude IOF-construct-namespace classes (upper-level, not domain)
+    FILTER ( ! STRSTARTS(STR(?class), STR(iof:)) )
+
+    # ---- Priority cascade ----
+    BIND (
+        IF (
+            # Priority 1–2: IOF-aligned
+            # Ancestor is BFO_0000144 (IOF-contributed despite BFO namespace)
+            # OR ancestor is in the IOF construct namespace
+            EXISTS {
+                ?class rdfs:subClassOf+ ?iofAnc .
+                FILTER (
+                    ?iofAnc = obo:BFO_0000144
+                    || STRSTARTS(STR(?iofAnc), STR(iof:))
+                )
+            },
+            "IOF-aligned",
+
+            IF (
+                # Priority 3: BFO-only-aligned
+                # Ancestor is in BFO namespace (excluding BFO_0000144,
+                # already caught above)
+                EXISTS {
+                    ?class rdfs:subClassOf+ ?bfoAnc .
+                    FILTER (
+                        STRSTARTS(STR(?bfoAnc), "http://purl.obolibrary.org/obo/BFO_")
+                        && ?bfoAnc != obo:BFO_0000144
+                    )
+                },
+                "BFO-only-aligned",
+
+                # Priority 4: Unaligned
+                "unaligned"
+            )
+        )
+        AS ?alignment
+    )
+}
+ORDER BY ?alignment ?class
+
+
+# ---------------------------------------------------------------------------
+# Query 2:  Summary counts and rates
+#
+# Run separately (most SPARQL endpoints do not support multiple SELECT
+# blocks in one request).  Save as alignment_rate_summary.sparql or
+# split at the comment delimiter.
+# ---------------------------------------------------------------------------
+#
+# PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+# PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+# PREFIX owl:  <http://www.w3.org/2002/07/owl#>
+# PREFIX obo:  <http://purl.obolibrary.org/obo/>
+# PREFIX iof:  <https://spec.industrialontologies.org/ontology/construct/>
+#
+# SELECT
+#     ?alignment
+#     (COUNT(?class) AS ?count)
+#     (COUNT(?class) / ?total AS ?rate)
+# WHERE {
+#     {
+#         SELECT (COUNT(?c) AS ?total)
+#         WHERE {
+#             ?c a owl:Class .
+#             FILTER ( isIRI(?c) )
+#             FILTER ( ?c != owl:Thing && ?c != owl:Nothing )
+#             FILTER ( ! STRSTARTS(STR(?c), "http://purl.obolibrary.org/obo/BFO_") )
+#             FILTER ( ! STRSTARTS(STR(?c), STR(iof:)) )
+#         }
+#     }
+#
+#     ?class a owl:Class .
+#     FILTER ( isIRI(?class) )
+#     FILTER ( ?class != owl:Thing && ?class != owl:Nothing )
+#     FILTER ( ! STRSTARTS(STR(?class), "http://purl.obolibrary.org/obo/BFO_") )
+#     FILTER ( ! STRSTARTS(STR(?class), STR(iof:)) )
+#
+#     BIND (
+#         IF (
+#             EXISTS {
+#                 ?class rdfs:subClassOf+ ?iofAnc .
+#                 FILTER (
+#                     ?iofAnc = obo:BFO_0000144
+#                     || STRSTARTS(STR(?iofAnc), STR(iof:))
+#                 )
+#             },
+#             "IOF-aligned",
+#             IF (
+#                 EXISTS {
+#                     ?class rdfs:subClassOf+ ?bfoAnc .
+#                     FILTER (
+#                         STRSTARTS(STR(?bfoAnc), "http://purl.obolibrary.org/obo/BFO_")
+#                         && ?bfoAnc != obo:BFO_0000144
+#                     )
+#                 },
+#                 "BFO-only-aligned",
+#                 "unaligned"
+#             )
+#         )
+#         AS ?alignment
+#     )
+# }
+# GROUP BY ?alignment ?total
+# ORDER BY ?alignment
+
+
+# ---------------------------------------------------------------------------
+# Validated scenarios (tested against IOF Core 202603 parse)
+#
+# These confirm the cascade handles the critical topologies correctly:
+#
+#   IOF-aligned        DomainClass ⊑ iof:Consumable ⊑ ... ⊑ BFO:material entity
+#   BFO-only-aligned   DomainClass ⊑ BFO:material entity  (IOF bypassed)
+#   IOF-aligned        DomainClass ⊑ BFO_0000144 ⊑ BFO:process  (carve-out)
+#   BFO-only-aligned   DomainClass ⊑ BFO:process  (no carve-out needed)
+#   unaligned          DomainClass with no upper-level ancestor
+#   IOF-aligned        DomainClass ⊑ iof:PlannedProcess ⊑ BFO:process
+#   BFO-only-aligned   B0 contamination: DomainClass ⊑ BFO:material entity
+#   IOF-aligned        B1 contamination: DomainClass ⊑ iof:PlannedProcess
+#
+# The BFO_0000144 carve-out fires only when needed: a domain class
+# under BFO_0000144 (process profile) is IOF-aligned because IOF is
+# the sole source of that class.  A domain class under BFO:process
+# (BFO_0000015) — which is BFO_0000144's own parent — is correctly
+# classified as BFO-only-aligned.
+# ---------------------------------------------------------------------------
