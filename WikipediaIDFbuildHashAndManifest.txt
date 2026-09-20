@@ -1,0 +1,12 @@
+2026-09-20 16:17:58,364 SHA-256: c9926f0a0ec5809614e191d2de299ec73a6eb623de445d6a1448e4f3c6bcc9c0
+
+--- Manifest entry ---
+{
+  "artefact": "wikipedia_idf_table",
+  "file": "wikipedia_idf_20260901.json.gz",
+  "sha256": "c9926f0a0ec5809614e191d2de299ec73a6eb623de445d6a1448e4f3c6bcc9c0",
+  "dump_date": "20260901",
+  "n_documents": 6906881,
+  "n_tokens": 1671528,
+  "min_df": 5
+}
