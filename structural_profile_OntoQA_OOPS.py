@@ -8,6 +8,14 @@ and wraps the OOPS! REST web service for pitfall detection.
 Dependencies:
     pip install rdflib requests
 
+BASH
+pip install rdflib requests
+python structural_profile.py bfo-core.owl --skip-oops         # OntoQA only
+python structural_profile.py bfo-core.owl                     # full profile
+python structural_profile.py bfo-core.owl --feedback          # see the generator's report
+
+Good — that removes the availability risk entirely. You'll just need to point OOPS_ENDPOINT in the module to your local instance's URL (same REST API contract).
+
 Usage:
     from structural_profile import compute_ontoqa, scan_oops, full_profile
 
