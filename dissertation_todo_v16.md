@@ -1,0 +1,79 @@
+# Dissertation — Implementation and Pre-Campaign Task List
+
+Companion to **dissertation_overview_and_paper_outlines_v16.md**. Covers all three papers. All effort figures are authorship and implementation effort, not the campaigns themselves, which are sized in Part I §12.
+
+The battery is not human-free. It is human-*bounded*: the remaining effort is authorship and scholarship, performed once, and none of it scales with the number of experimental runs, rounds, or conditions.
+
+---
+
+## Completed
+
+- **Codebook provenance review** against BFO 2020, ISO/IEC 21838-2 and Arp et al. — 6 codes × 6 fields, primary sources only. **Done (codebook v8).** *Retained in project archive; codebook is no longer a governing document for the dissertation but may be published separately.*
+- **Historical→current E-code crosswalk** added to codebook front matter — 1 table. **Done (codebook v12 §0.01–0.02).** *Archived with codebook.*
+
+## Closed in v16
+
+- **Implement structural profile computation and set up the OOPS! pipeline** (previously item 3). Implementation complete (`structural_profile.py`): seven OntoQA metrics via rdflib (validated against bfo-core.owl — 36 classes, 40 relations, max depth 5, mean depth 3.36), OOPS! REST client with XML response parsing, feedback report renderer, and flat scoring record for the battery log. OOPS! only implements 21 of 41 catalogued pitfalls. **Done (v16).**
+- **Implement the windowing selection rule and patch-merge semantics** (previously item 4a). Specification complete (`windowing_spec_v15.md`): four-phase deterministic selection algorithm, patch-merge with collision validation, visibility logging with 18-field per-chunk record, five aggregated statistics for Paper 1, and eight-test validation plan. Five parameters to pin before pilot (WINDOW_ALLOTMENT, CHUNK_ALLOTMENT, SIM_THRESHOLD, FAN_OUT_CAP, EMBEDDING_MODEL). **Done (v16).**
+- **Implement deterministic integration and defect routing for D1** (previously item 4b). Specification complete (`deterministic_integration_spec_v16.md`): two-stage deterministic procedure (union + LogMap alignment), IRI provenance map, defect routing to all involved sub-ontologies, per-round logging with delta rate and IRI stability. LLM merge replaced; anchored re-integration eliminated. Eight-test validation plan. **Done (v16).**
+- **Implement salient-term extraction and the coverage scoring pipeline** (previously item 2). Implementation complete (`salient_term_pipeline.py`): C-value/NC-value + TF-IDF against Wikipedia IDF table, embedding-based matching via `embedding_utils.py`, genre coverage balance (normalised entropy), SPO assertion extractor for Paper 2. Smoke-tested with synthetic manufacturing data and the Wikipedia IDF table. **Done (v16).**
+
+## Closed in v15
+
+- **Run the pitfall-overlap audit** (previously item 3a). Closed: OntoQA structural profile reclassified from held out to loop-coupled (coupled through the OOPS! channel). The full OOPS! report is fed back with no suppression. No suppressed-pitfall list is needed because there is no held-out metric to protect. The audit analysis (pitfall_overlap_audit_v14.md) is retained in the project archive as the analysis that motivated this decision. **Closed (v15).**
+
+## Closed in v14
+
+- **Implement the alignment-rate query** (previously item 2). Design settled and query implemented (`alignment_rate.sparql`): a single SPARQL query implementing the priority cascade (`BFO_0000144` → IOF-aligned; `iof-constr:` → IOF-aligned; other `obo:BFO_` → BFO-only-aligned; else unaligned). Validated against IOF Core 202603 parse across eight critical topologies. **Done (v14).**
+
+## Closed in v13
+
+- **Freeze the lexical criterion for E4.** Closed: E-codes removed from the design.
+- **Implement the six Tier A/B detectors.** Closed: E-codes removed from the design.
+- **Build the three B2 baseline-exclusion lists.** Closed: E-codes removed from the design.
+- **BFO build diff (codebook Table 0.2b).** Previously completed; no longer required by the design. Retained in codebook archive.
+- **Codebook checklist items 9, 10, 18, 19, 20.** All closed: E-codes removed from the design; the codebook is archived.
+
+---
+
+## Task list
+
+0. **Take the design to the committee.** Everything below commits infrastructure and a multi-month campaign to a factor structure that has not been approved. Approval is the first dependency, not a formality to be collected later.
+1. **Author and freeze the CQ set** (50–100 questions) with SPARQL translations, tagged by question type and genre relevance.
+2. **Run the salient-term pipeline on the real corpus.** Load the corpus as `CorpusDocument` objects with genre labels, run `extract_terms_from_corpus()` against the Wikipedia IDF table, calibrate `SIM_THRESHOLD` from the similarity distribution, freeze the salient-term inventory (asset 2) and the salient-assertion inventory (asset 3). Record the threshold, term counts, and genre proportions in the manifest.
+3. ~~**Implement co-occurrence-anomalous entailment scoring**~~ **(deferred / drop candidate)** — corpus co-occurrence statistics, reasoner-derived entailment extraction, anomaly ranking, and the threshold sensitivity sweep. Exploratory only; no hypothesis attached; not on the critical path; no other task depends on it. Can be built after the pilot if the committee requests it.
+5. **Build the generation pipeline with round-state checkpointing and feedback logging**, so that the ontology state after each of the 9 rounds plus the R0 state is saved and evaluable, and so that payload tokens and flagged-item counts are recorded per round per condition. Each round receives fresh-only feedback (current ontology + reasoner, profile and conformance reports; no accumulated history; no round counter). Under D1, integration is re-run deterministically each round from the current sub-ontologies.
+6. **Run the pre-campaign pilot.** Two seeds, two conditions (B0D0 and B2D1), R = 15, full battery at every round. Purposes, in order: settle the round count; measure integration loss and the defect-routing split; verify LogMap alignment stability across rounds (do alignments shift as sub-ontologies evolve?); expose the loop-coupling behaviour predicted in §6.7 before it is baked into 600 runs; measure feedback payload volume by condition for the H1e covariate; supply variance estimates for a real MDE; and shake out the pipeline end to end. A few days of compute that de-risks everything after it.
+7. **Implement the community-structure pipeline for Paper 2** — Leiden with CPM over a resolution grid, node genre-labelling with the purity threshold, genre-AMI, and standard modularity as an ancillary comparison. Library calls; modest effort but must be in place before the Paper 2 campaign.
+8. **Run the determinism audit** — three runs of one configuration under an identical seed, hashes compared.
+9. **Verify redaction feasibility** on the corrective-action records before committing Paper 3.
+10. **Build the population pipeline and NLI verifier**, with its calibration harness — schema-constrained extraction + verifier characterisation.
+11. **Build the Paper 3 benchmark pipeline** — label mining, redaction, synthetic scenario injection, NLI answer matcher and its calibration.
+12. **Implement the five retrieval mechanisms** as parameterised components for the Paper 3 system.
+13. **Compute the minimum detectable effect** at *k* = 10 for each outcome scope, using pilot variance rather than assumed variance, including the within-subject round effects, and record it — together with the contingency for an MDE that exceeds plausible effects — in the pre-registration.
+14. **Size the campaign** (Part I §12) from pilot throughput, and fix in advance the Paper 2 round subset and the Paper 3 Stage 1 factor cap that will apply if the full design proves infeasible.
+15. **Verify all references** against the personal library, including the citations added in prior revisions (Traag et al. 2019; Traag, Van Dooren & Nesterov 2011; Duque-Ramos et al. 2011; Levy, Jacoby & Goldberg, ACL 2024; Liu et al., TACL 2024).
+16. **Pre-register** design, hypotheses (H1a–H1f, with B×D×R noted as exploratory), instruments, the loop-coupled/held-out split, the analysis plan including the trajectory model, and the declared contingencies. Include the four checkpoint rounds (0, 3, 6, 9) for Paper 3 Stage 2 and the longitudinal mediation as ancillary.
+
+---
+
+## Indicative sequencing
+
+| | Task | Effort | Blocks |
+|---|---|---|---|
+| 0 | Committee approval of the design | — | Everything |
+| 1 | CQ set and SPARQL translations | 3–5 days | CQ scoring |
+| 2 | Salient-term and salient-assertion extraction, coverage scoring | 4–5 days | Corpus-grounded coverage; Paper 2 salience recall |
+| 3 | Structural metrics and OOPS! pipeline | 1–2 days | Structural profile; feedback payload contents |
+| 4 | Co-occurrence-anomalous entailment scoring (exploratory) | 1–2 days | Exploratory logical quality (depends on 2) |
+| 5 | Generation pipeline with round-state checkpointing, windowing/patch-merge, deterministic integration, defect routing, and feedback logging | 4–6 days | Pilot, then Paper 1 campaign |
+| 6 | Pilot: 2 seeds × 2 conditions × R = 15 | 2–4 days plus compute | Round count; MDE; campaign sizing |
+| 7 | Community-structure pipeline (Leiden/CPM profile, genre-AMI, modularity) | 1–2 days | Paper 2 campaign |
+| 8 | Determinism audit | 1 day | Paper 1 campaign |
+| 9 | Redaction feasibility check for Paper 3 | 1–2 days | Paper 3 design |
+| 10 | Population pipeline + NLI verifier with calibration | 3–5 days | Paper 2 campaign |
+| 11 | Paper 3 benchmark pipeline + answer matcher with calibration | 3–5 days | Paper 3 campaign |
+| 12 | Five retrieval mechanisms | 3–5 days | Paper 3 campaign |
+| 13 | MDE from pilot variance, campaign sizing, pre-registration | 3–4 days | Paper 1 campaign |
+
+Roughly **three to four weeks of tooling and pilot work**, not counting committee time and not counting the campaigns themselves, which are sized in Part I §12 and are where the real elapsed time sits. Items 1, 2–4 are parallelisable (item 4 depends on 2). Items 7 and 10–12 can run in parallel with the Paper 1 campaign. The critical path is item 5 → item 6 → item 13: the generation pipeline gates the pilot, the pilot gates the round count and the MDE, and both gate the pre-registration that the main campaign should not start without.
