@@ -1,4 +1,16 @@
 """
+Here's the pipeline. The workflow is:
+
+Export the CQ doc to markdown and point --cq-file at it.
+Point --corpus-dir at your corpus text files, organized by genre in subdirectories (or provide a --genre-map JSON).
+Optionally point --terms-dir at the salient-term inventories from your existing pipeline — this enables the embedding expansion step. Without it you still get the hit-test report.
+
+The output JSON gives you per-CQ: which patterns hit, how many documents per genre, suggested synonyms with similarity scores, and the patched SPARQL. The zero-hit CQs are flagged for manual review — those are the ones where the ontology vocabulary you're asking about might not match what your documents actually say.
+
+One thing to watch: the embedding expansion threshold (default 0.72) needs calibrating the same way SIM_THRESHOLD does in the windowing spec — run it once, look at the similarity distribution, and decide where the noise starts. Too low and you get "solder" expanding to "soldier"; too high and you miss "MRB item" as a synonym for "disposition."
+"""
+
+"""
 CQ Pattern Calibration Pipeline
 ================================
 
