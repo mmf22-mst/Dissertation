@@ -1,3 +1,27 @@
+That's the full pipeline — 15 modules, ~3,900 lines, all layers from the architecture sketch. Here's what you have and what to do next.
+
+What's in the package (maps to the architecture sketch):
+
+Layer	Modules	Status
+0 — Foundations	ontology_model, corpus, checkpoint	Complete
+1 — Chunking + injection	chunker, injection	Complete
+2 — Windowing + patch-merge	windowing, patch_merge	Complete
+3 — Prompt + LLM	prompt, llm	Complete (two backends: completions API and chat API)
+4 — Integration + routing	integration, defect_routing	Complete (LogMap/AML as subprocess stubs — you'll need to wire to your Java installs)
+5 — Battery + feedback	battery	Complete (instrument functions are pluggable — you wire in your existing structural_profile.py, salient_term_pipeline.py, etc.)
+6 — Orchestrator	orchestrator, campaign	Complete
+
+What you need to do to get it running:
+
+Install deps on your machine: rdflib, numpy, sentence-transformers (or whatever embedding model you're using), requests (for the LLM API client).
+Wire the battery instruments. The Battery class takes callables — plug in your existing structural_profile.py and salient_term_pipeline.py, write thin wrappers for the reasoner (HermiT or ELK via owlready2 or the OWL API) and the OOPS! client you already built.
+Wire the LLM backend. Point OpenAICompatibleBackend or ChatBackend at your local vLLM/llama.cpp server.
+Wire LogMap/AML. The _run_logmap stub shows the subprocess pattern — you'll need to adjust the command line to match your LogMap JAR's actual CLI.
+Pin the allotments. Run the B2 fit test: load IOF Core, render the injection, measure tokens, and set WINDOW_ALLOTMENT and CHUNK_ALLOTMENT to fit comfortably alongside it.
+Smoke test. One seed, B0D0, R=2. Then one seed, B2D1, R=2. Then three identical B0D0 runs for the determinism audit (Task 7).
+
+The prompt templates in prompt.py are deliberately plain — you'll want to tune the system prompt wording, but the structure (three-allotment, no round counter, no history) is locked in by the spec. The files below have everything.
+
 # Generation Pipeline — Architecture Sketch
 
 Task 4 build plan.  Companion to `dissertation_overview_and_paper_outlines_v17.md` §4.2–4.4,
