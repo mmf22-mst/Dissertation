@@ -1,3 +1,17 @@
+# Kilby: 
+The plan is structured as nine steps, roughly 3–4 days:
+
+Day 1 — Environment setup, B2 fit test to pin allotments, wire the LLM backend and confirm deterministic decoding.
+
+Day 2 — Wire the five battery instrument wrappers around your existing code (structural_profile.py, OOPS! client, alignment_rate.sparql, salient_term_pipeline.py, plus a reasoner stub). Wire LogMap if straightforward, skip if not (Stage 1 union-only integration works without it). Assemble the Battery.
+
+Day 3 — Smoke test 1 (B0D0, R=2 on a tiny fabricated corpus) and smoke test 2 (B2D1, R=2 on the same). Debug the inevitable parse failures, instrument wiring issues, and checkpoint format problems.
+
+Day 4 — Determinism audit: three identical B0D0 runs, hash comparison. If they match, Task 7 is closed and you're ready for the pilot.
+
+The biggest risk is the OWL parser — the model's actual output format will probably surprise you (markdown fences, preamble text, truncation). Budget some debugging time in extract_owl_from_response. The second risk is OOPS! availability — it's a remote web service and can be slow or down. For the smoke test, a stub that returns an empty report is fine; for the pilot, you'll want a timeout/retry wrapper.
+
+
 # Wiring & Smoke-Test Plan
 
 Get the pipeline running on local hardware, validate each layer,
