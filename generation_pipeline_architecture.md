@@ -1,27 +1,3 @@
-That's the full pipeline — 15 modules, ~3,900 lines, all layers from the architecture sketch. Here's what you have and what to do next.
-
-What's in the package (maps to the architecture sketch):
-
-Layer	Modules	Status
-0 — Foundations	ontology_model, corpus, checkpoint	Complete
-1 — Chunking + injection	chunker, injection	Complete
-2 — Windowing + patch-merge	windowing, patch_merge	Complete
-3 — Prompt + LLM	prompt, llm	Complete (two backends: completions API and chat API)
-4 — Integration + routing	integration, defect_routing	Complete (LogMap/AML as subprocess stubs — you'll need to wire to your Java installs)
-5 — Battery + feedback	battery	Complete (instrument functions are pluggable — you wire in your existing structural_profile.py, salient_term_pipeline.py, etc.)
-6 — Orchestrator	orchestrator, campaign	Complete
-
-What you need to do to get it running:
-
-Install deps on your machine: rdflib, numpy, sentence-transformers (or whatever embedding model you're using), requests (for the LLM API client).
-Wire the battery instruments. The Battery class takes callables — plug in your existing structural_profile.py and salient_term_pipeline.py, write thin wrappers for the reasoner (HermiT or ELK via owlready2 or the OWL API) and the OOPS! client you already built.
-Wire the LLM backend. Point OpenAICompatibleBackend or ChatBackend at your local vLLM/llama.cpp server.
-Wire LogMap/AML. The _run_logmap stub shows the subprocess pattern — you'll need to adjust the command line to match your LogMap JAR's actual CLI.
-Pin the allotments. Run the B2 fit test: load IOF Core, render the injection, measure tokens, and set WINDOW_ALLOTMENT and CHUNK_ALLOTMENT to fit comfortably alongside it.
-Smoke test. One seed, B0D0, R=2. Then one seed, B2D1, R=2. Then three identical B0D0 runs for the determinism audit (Task 7).
-
-The prompt templates in prompt.py are deliberately plain — you'll want to tune the system prompt wording, but the structure (three-allotment, no round counter, no history) is locked in by the spec. The files below have everything.
-
 # Generation Pipeline — Architecture Sketch
 
 Task 4 build plan.  Companion to `dissertation_overview_and_paper_outlines_v17.md` §4.2–4.4,
@@ -42,7 +18,7 @@ and evaluating at every round state (R0–R9).
 ```
 for seed in seeds:                          # k = 10
     genre_order = resolve_genre_order(seed)  # S-GEN governs this
-    for condition in [B0D0, B0D1, B1D0, B1D1, B2D0, B2D1]:
+    for condition in [B0D0, B0D1, B1D0, B1D1, B2aD0, B2aD1, B2bD0, B2bD1]:
         run = init_run(seed, condition)
 
         # ── Phase 1: Construction (produces R0) ──────────────
@@ -77,7 +53,7 @@ for seed in seeds:                          # k = 10
             evaluate_battery(run, round=r, ontology)
 ```
 
-**60 runs × 10 round-states = 600 checkpoints.**
+**80 runs × 10 round-states = 800 checkpoints.**
 Under D1 each checkpoint also stores the G sub-ontologies and the integration log.
 
 ---
@@ -100,7 +76,7 @@ Each box below is a module.  Existing specs / implementations are noted;
 
 | Component | Status | Description |
 |---|---|---|
-| `injection_renderer` | **to build** | Deterministic extraction of class/relation labels + definitions from `bfo-core.owl` (B1) or resolved `Core.rdf` (B2); alphabetical sort, IRI tie-break; truncation at INJECTION_ALLOTMENT with truncation point logged. B0 produces an empty injection block. |
+| `injection_renderer` | **to build** | Deterministic extraction of class/relation labels + definitions from `bfo-core.owl` (B1), resolved `Core.rdf` (B2a), or `CommonCoreOntologiesMerged.ttl` (B2b); alphabetical sort, IRI tie-break; truncation at INJECTION_ALLOTMENT with truncation point logged. B0 produces an empty injection block. |
 | `prompt_builder_construct` | **to build** | Assembles the three-allotment prompt: injection + window/full ontology + chunk. Calls windowing if needed. Uniform template across B; only injection content differs. |
 | `prompt_builder_iterate` | **to build** | Assembles the iteration prompt: injection + window/full ontology + 6-item feedback payload. No round counter, no history. Same allotments as construction. |
 
@@ -182,7 +158,7 @@ campaign/
 ```
 
 **Size estimate.** Each `.owl` file is likely 100 KB–1 MB depending on how large
-the ontology grows.  600 checkpoints × ~1 MB ≈ 600 MB for the main artefacts;
+the ontology grows.  800 checkpoints × ~1 MB ≈ 800 MB for the main artefacts;
 D1 sub-ontologies multiply that by G for 30 runs.  Total campaign storage on
 the order of a few GB — fits comfortably on local disk.
 
@@ -438,9 +414,9 @@ All recorded in the campaign manifest.
 
 | Parameter | Source | Notes |
 |---|---|---|
-| WINDOW_ALLOTMENT | B2 fit test | Token budget for ontology view |
-| CHUNK_ALLOTMENT | B2 fit test | Token budget per corpus chunk |
-| INJECTION_ALLOTMENT | B2 fit test | Token budget for B2 injection |
+| WINDOW_ALLOTMENT | B2a fit test | Token budget for ontology view |
+| CHUNK_ALLOTMENT | B2a fit test | Token budget per corpus chunk |
+| INJECTION_ALLOTMENT | B2a fit test | Token budget for B2a injection (B2b truncated within same allotment) |
 | SIM_THRESHOLD | Calibration (task 2 output) | Embedding similarity for windowing |
 | FAN_OUT_CAP | Design choice | Max siblings+children per matched class |
 | EMBEDDING_MODEL | Manifest | Same as salient-term pipeline |

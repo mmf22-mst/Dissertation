@@ -1,17 +1,3 @@
-# Kilby: 
-The plan is structured as nine steps, roughly 3–4 days:
-
-Day 1 — Environment setup, B2 fit test to pin allotments, wire the LLM backend and confirm deterministic decoding.
-
-Day 2 — Wire the five battery instrument wrappers around your existing code (structural_profile.py, OOPS! client, alignment_rate.sparql, salient_term_pipeline.py, plus a reasoner stub). Wire LogMap if straightforward, skip if not (Stage 1 union-only integration works without it). Assemble the Battery.
-
-Day 3 — Smoke test 1 (B0D0, R=2 on a tiny fabricated corpus) and smoke test 2 (B2D1, R=2 on the same). Debug the inevitable parse failures, instrument wiring issues, and checkpoint format problems.
-
-Day 4 — Determinism audit: three identical B0D0 runs, hash comparison. If they match, Task 7 is closed and you're ready for the pilot.
-
-The biggest risk is the OWL parser — the model's actual output format will probably surprise you (markdown fences, preamble text, truncation). Budget some debugging time in extract_owl_from_response. The second risk is OOPS! availability — it's a remote web service and can be slow or down. For the smoke test, a stub that returns an empty report is fine; for the pilot, you'll want a timeout/retry wrapper.
-
-
 # Wiring & Smoke-Test Plan
 
 Get the pipeline running on local hardware, validate each layer,
@@ -100,13 +86,15 @@ Pin the model name in the manifest.  This function is passed as
 
 ---
 
-## 1. Pin the allotments — the B2 fit test (half day)
+## 1. Pin the allotments — the B2a fit test (half day)
 
-The three prompt allotments must be set so B2's full injection fits
-alongside the window and the chunk within the context window.  This
-is the sizing exercise that everything else depends on.
+The three prompt allotments must be set so B2a's full injection fits
+alongside the window and the chunk within the context window.  B2b
+(CCO) will be truncated within the same allotment — its full inventory
+(~90K tokens) far exceeds B2a's (~12K).  This is the sizing exercise
+that everything else depends on.
 
-### 1.1 Measure the B2 injection
+### 1.1 Measure the B2a and B2b injections
 
 ```python
 from pipeline.injection import render_injection
@@ -114,14 +102,25 @@ from pipeline.ontology_model import GroundingLevel
 from wiring.token_counter import count_tokens
 from pathlib import Path
 
-result = render_injection(
-    grounding=GroundingLevel.B2,
+# B2a — the binding constraint for allotment sizing
+result_b2a = render_injection(
+    grounding=GroundingLevel.B2a,
     iof_core_path=Path("iof-core.rdf"),
     injection_allotment=99999,  # no truncation — measure full size
     token_counter=count_tokens,
 )
-print(f"B2 full injection: {result.token_count} tokens, "
-      f"{result.entries_total} entries")
+print(f"B2a full injection: {result_b2a.token_count} tokens, "
+      f"{result_b2a.entries_total} entries")
+
+# B2b — will be truncated; measure full size for the record
+result_b2b = render_injection(
+    grounding=GroundingLevel.B2b,
+    cco_merged_path=Path("CommonCoreOntologiesMerged.ttl"),
+    injection_allotment=99999,
+    token_counter=count_tokens,
+)
+print(f"B2b full injection: {result_b2b.token_count} tokens, "
+      f"{result_b2b.entries_total} entries")
 ```
 
 Do the same for B1 (`bfo-core.owl`).  B0 is 0 tokens.
@@ -135,7 +134,7 @@ OUTPUT_RESERVE         = ~8000 tokens (model's generation budget)
 
 AVAILABLE = CONTEXT_WINDOW - SYSTEM_OVERHEAD - OUTPUT_RESERVE
 
-INJECTION_ALLOTMENT    = result.token_count  (or round up slightly)
+INJECTION_ALLOTMENT    = result_b2a.token_count  (or round up slightly)
 REMAINING              = AVAILABLE - INJECTION_ALLOTMENT
 WINDOW_ALLOTMENT       = REMAINING * 0.6     (most goes to the ontology)
 CHUNK_ALLOTMENT        = REMAINING * 0.4     (rest to the corpus chunk)
@@ -143,8 +142,9 @@ CHUNK_ALLOTMENT        = REMAINING * 0.4     (rest to the corpus chunk)
 
 Adjust the 60/40 split to taste.  The key constraints:
 - `INJECTION_ALLOTMENT + WINDOW_ALLOTMENT + CHUNK_ALLOTMENT + SYSTEM_OVERHEAD + OUTPUT_RESERVE ≤ CONTEXT_WINDOW`
-- All three are **fixed across B** — B0 and B1 get the same window and chunk budgets as B2.
-- If B2 doesn't fit without truncation, truncation kicks in and you record the truncation point.
+- All three are **fixed across B** — B0, B1, and B2b get the same window and chunk budgets as B2a.
+- B2a may or may not fit without truncation; if not, truncation kicks in and you record the truncation point.
+- B2b **will** be heavily truncated (full inventory ~6× larger than B2a's).  Record the truncation point and the truncation fraction for the methods section.
 
 ### 1.3 Verify
 
@@ -519,7 +519,7 @@ Checklist:
 
 ---
 
-## 7. Smoke test 2: B2D1, R=2 (half day)
+## 7. Smoke test 2: B2aD1, R=2 (half day)
 
 This tests the full D1 path: per-genre construction, integration,
 defect routing, per-sub-ontology iteration.
@@ -529,14 +529,14 @@ defect routing, per-sub-ontology iteration.
 Same test corpus.  Change the condition:
 
 ```python
-config.conditions = [Condition(GroundingLevel.B2, DecompositionLevel.D1)]
+config.conditions = [Condition(GroundingLevel.B2a, DecompositionLevel.D1)]
 config.campaign_dir = Path("smoke_test_2")
 ```
 
 ### 7.2 Verify — same checklist as §6.3, plus:
 
 ```
-runs/seed_00_B2D1/
+runs/seed_00_B2aD1/
   R00/
     sub_ontologies/          ← one .owl per genre?
       ncr.owl
@@ -554,9 +554,35 @@ Additional checks:
       multiple genres (proves cross-genre entities were detected)
 - [ ] Iteration log has records for each sub-ontology AND an
       integration record per round
-- [ ] Injection text is non-empty (B2 should have the IOF block)
+- [ ] Injection text is non-empty (B2a should have the IOF block)
 - [ ] Defect routing produces both single-source and multi-source splits
       (check the routing log entry in `iteration_log.jsonl`)
+
+---
+
+## 7b. Smoke test 3: B2bD0, R=2 (quarter day)
+
+This tests the CCO injection path — confirming the renderer parses
+the TTL source, truncates correctly, and the model receives a
+non-empty CCO injection block.
+
+### 7b.1 Run it
+
+```python
+config.conditions = [Condition(GroundingLevel.B2b, DecompositionLevel.D0)]
+config.campaign_dir = Path("smoke_test_3")
+```
+
+### 7b.2 Verify
+
+- [ ] Injection text is non-empty and starts with the CCO header
+- [ ] `injection.entries_total` ≈ 1,687 (full CCO inventory)
+- [ ] `injection.truncated` is `True` (expected — allotment sized for B2a)
+- [ ] `injection.entries_included` < `injection.entries_total` (confirms truncation)
+- [ ] Truncation fraction logged — record for the methods section
+- [ ] Generated ontology is parseable, non-empty, and has domain classes
+- [ ] Alignment-rate query produces a non-empty result with at least
+      some CCO-aligned classes (confirms the cco: cascade fires)
 
 ---
 
@@ -631,7 +657,7 @@ Task 7 is done.  Record the result in the seed register.
 | Layer | Validated by |
 |---|---|
 | Corpus + chunking | Smoke 1 (chunks produced, logged) |
-| Injection rendering | Smoke 2 (B2 injection non-empty) |
+| Injection rendering | Smoke 2 (B2a injection non-empty); Smoke 3 (B2b injection non-empty, truncation confirmed) |
 | Windowing + patch-merge | Smoke 1 (windowing may or may not fire on tiny corpus — if not, run the windowing_spec test plan §7 separately) |
 | LLM calling + OWL parsing | Smoke 1 (ontologies produced, parsed) |
 | Integration + defect routing | Smoke 2 (sub-ontologies merged, defects routed) |
@@ -639,7 +665,7 @@ Task 7 is done.  Record the result in the seed register.
 | Checkpointing | Smoke 1+2 (all files written, loadable) |
 | Determinism | Task 7 (hashes match or divergence documented) |
 
-**After this you are ready for Task 5 (pilot):** 2 seeds, B0D0 + B2D1,
+**After this you are ready for Task 5 (pilot):** 2 seeds, B0D0 + B2aD1 + B2bD1,
 R=15, full battery, real corpus.
 
 **Before the pilot, also wire:**

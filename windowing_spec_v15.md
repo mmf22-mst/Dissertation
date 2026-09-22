@@ -36,7 +36,7 @@ The generation prompt has three pinned allotments (Paper 1 §4.2):
 | Window     | View onto the accumulated ontology          | No             |
 | Chunk      | Corpus text for this call                   | No             |
 
-Window and chunk allotments are fixed once, at values that fit under B2's
+Window and chunk allotments are fixed once, at values that fit under B2a's
 injection, and reused unchanged for B0 and B1. This guarantees that corpus
 exposure, accumulation steps, and windowing frequency are identical across
 grounding conditions.
@@ -59,8 +59,8 @@ else:
 
 | Parameter           | Description                                 | Pinned by   |
 |---------------------|---------------------------------------------|-------------|
-| `WINDOW_ALLOTMENT`  | Token budget for the ontology view          | B2 fit test |
-| `CHUNK_ALLOTMENT`   | Token budget for the corpus chunk           | B2 fit test |
+| `WINDOW_ALLOTMENT`  | Token budget for the ontology view          | B2a fit test |
+| `CHUNK_ALLOTMENT`   | Token budget for the corpus chunk           | B2a fit test |
 | `SIM_THRESHOLD`     | Embedding similarity threshold for matching | Calibration |
 | `FAN_OUT_CAP`       | Max siblings + children added per matched class | Design choice |
 | `EMBEDDING_MODEL`   | Model used for label ↔ term similarity      | Manifest    |
